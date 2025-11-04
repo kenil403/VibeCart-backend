@@ -29,43 +29,45 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
   console.error('❌ MONGODB_URI is not defined in .env file');
+  console.error('Please check your .env file and ensure MONGODB_URI is set');
   process.exit(1);
 }
+
+console.log('🔄 Connecting to MongoDB...');
+console.log(`📊 Database name: ${MONGODB_URI.split('/').pop().split('?')[0]}`);
 
 mongoose.set('strictQuery', false);
 
 // Connection options
 const mongooseOptions = {
-  serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
+  serverSelectionTimeoutMS: 30000,
   socketTimeoutMS: 45000,
-  family: 4, // Use IPv4, skip trying IPv6
+  family: 4,
+  retryWrites: true,
+  w: 'majority'
 };
 
 mongoose.connect(MONGODB_URI, mongooseOptions)
   .then(() => {
-    console.log('✅ MongoDB connected');
+    console.log('✅ MongoDB connected successfully');
   })
   .catch(err => {
-    console.error('❌ MongoDB not connected:', err.message);
+    console.error('❌ MongoDB connection failed:', err.message);
+    console.error('Please check:');
+    console.error('1. MongoDB URI is correct');
+    console.error('2. Database user has proper permissions');
+    console.error('3. IP address is whitelisted in MongoDB Atlas');
+    console.error('4. Network connection is stable');
     process.exit(1);
   });
 
-// Handle connection events
+// Handle connection events (consolidated - no duplicates)
 mongoose.connection.on('disconnected', () => {
   console.log('⚠️  MongoDB disconnected');
 });
 
 mongoose.connection.on('reconnected', () => {
   console.log('✅ MongoDB reconnected');
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('❌ MongoDB error:', err.message);
-});
-
-// Handle MongoDB connection events
-mongoose.connection.on('disconnected', () => {
-  console.log('⚠️  MongoDB disconnected');
 });
 
 mongoose.connection.on('error', (err) => {
@@ -89,7 +91,8 @@ app.get('/api/health', (req, res) => {
     message: 'Server is running',
     database: {
       status: dbStatus,
-      name: mongoose.connection.name
+      name: mongoose.connection.name,
+      readyState: mongoose.connection.readyState
     },
     timestamp: new Date().toISOString()
   });
@@ -118,8 +121,9 @@ app.use((req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error:', err.stack);
   res.status(500).json({ 
+    success: false,
     error: 'Something went wrong!',
     message: err.message 
   });
