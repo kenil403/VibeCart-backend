@@ -129,33 +129,43 @@ router.get('/:id', async (req, res) => {
 
 // POST create product (Protected - Any logged in user)
 // Accepts multipart/form-data with an optional file field named 'image'.
-router.post('/', protect, multerConfig.memory.single('image'), [
-  body('name')
+router.post('/', protect, multerConfig.memory.single('image'), async (req, res) => {
+  // Validate after multer has parsed the body
+  await body('name')
     .trim()
     .notEmpty()
     .withMessage('Product name is required')
     .isLength({ max: 100 })
-    .withMessage('Product name cannot exceed 100 characters'),
-  body('description')
+    .withMessage('Product name cannot exceed 100 characters')
+    .run(req);
+  
+  await body('description')
     .trim()
     .notEmpty()
     .withMessage('Product description is required')
     .isLength({ max: 1000 })
-    .withMessage('Description cannot exceed 1000 characters'),
-  body('price')
+    .withMessage('Description cannot exceed 1000 characters')
+    .run(req);
+  
+  await body('price')
     .notEmpty()
     .withMessage('Price is required')
     .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
-  body('category')
+    .withMessage('Price must be a positive number')
+    .run(req);
+  
+  await body('category')
     .trim()
     .notEmpty()
-    .withMessage('Category is required'),
-  body('stock')
+    .withMessage('Category is required')
+    .run(req);
+  
+  await body('stock')
     .optional()
     .isInt({ min: 0 })
     .withMessage('Stock must be a positive integer')
-], async (req, res) => {
+    .run(req);
+
   // Check for validation errors
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -205,26 +215,34 @@ router.post('/', protect, multerConfig.memory.single('image'), [
 
 // PUT update product (Protected - Owner or Admin only)
 // Update product (can include new image file in field 'image')
-router.put('/:id', protect, multerConfig.memory.single('image'), [
-  body('name')
+router.put('/:id', protect, multerConfig.memory.single('image'), async (req, res) => {
+  // Validate after multer has parsed the body
+  await body('name')
     .optional()
     .trim()
     .isLength({ min: 1, max: 100 })
-    .withMessage('Product name must be between 1 and 100 characters'),
-  body('description')
+    .withMessage('Product name must be between 1 and 100 characters')
+    .run(req);
+  
+  await body('description')
     .optional()
     .trim()
     .isLength({ min: 1, max: 1000 })
-    .withMessage('Description must be between 1 and 1000 characters'),
-  body('price')
+    .withMessage('Description must be between 1 and 1000 characters')
+    .run(req);
+  
+  await body('price')
     .optional()
     .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
-  body('stock')
+    .withMessage('Price must be a positive number')
+    .run(req);
+  
+  await body('stock')
     .optional()
     .isInt({ min: 0 })
     .withMessage('Stock must be a positive integer')
-], async (req, res) => {
+    .run(req);
+
   // Check for validation errors
   const errors = validationResult(req);
   if (!errors.isEmpty()) {

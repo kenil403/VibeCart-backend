@@ -115,9 +115,90 @@ JWT_EXPIRE=30d
 - `POST /api/upload/single` - Upload single image (protected)
 - `POST /api/upload/multiple` - Upload multiple images (protected)
 
+### Image Serving
+- `GET /api/products/:id/image` - Get product image binary (public)
+
 ### Health Check
 - `GET /api` - API info
 - `GET /api/health` - Server health status
+
+## 📸 Image Upload & Storage
+
+### Binary Image Storage in MongoDB
+
+Products now support storing images directly in MongoDB as binary data (Buffer), eliminating the need for external file storage or localhost URLs.
+
+#### Features:
+- **Binary storage**: Images stored in `imageData` field (Buffer + contentType)
+- **No localhost URLs**: Works seamlessly on Render, Railway, Vercel, etc.
+- **Automatic image serving**: Each product gets an image endpoint
+- **Memory-efficient**: Binary data excluded from product list responses
+
+#### Creating a Product with Image:
+
+**Using multipart/form-data (recommended):**
+```bash
+curl -X POST "https://your-api.onrender.com/api/products" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "name=Cool Product" \
+  -F "description=Amazing product description" \
+  -F "price=29.99" \
+  -F "category=Electronics" \
+  -F "stock=50" \
+  -F "image=@/path/to/image.jpg"
+```
+
+**Response includes image URL:**
+```json
+{
+  "success": true,
+  "message": "Product created successfully",
+  "data": {
+    "_id": "abc123...",
+    "name": "Cool Product",
+    "imageUrl": "/api/products/abc123.../image"
+  }
+}
+```
+
+#### Displaying Images in Frontend:
+
+```javascript
+// React example
+const ProductCard = ({ product }) => {
+  const imageUrl = `${API_BASE_URL}${product.imageUrl}`;
+  
+  return (
+    <img 
+      src={imageUrl} 
+      alt={product.name}
+      onError={(e) => {
+        e.target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+      }}
+    />
+  );
+};
+```
+
+#### Technical Details:
+- **Max file size**: 5MB (configurable in `config/multer.js`)
+- **Allowed formats**: JPEG, JPG, PNG, GIF, WEBP
+- **Storage**: MongoDB document field (`imageData.data: Buffer`)
+- **Content-Type**: Preserved and served with correct MIME type
+- **Performance**: Binary fields excluded from list queries (`.select('-imageData')`)
+
+#### Scalability Considerations:
+
+For production apps with many/large images, consider:
+1. **GridFS**: MongoDB's spec for storing large files (>16MB documents)
+2. **Cloud Storage**: AWS S3, Google Cloud Storage, Azure Blob
+3. **CDN**: CloudFront, Cloudflare for faster global delivery
+4. **Image optimization**: Resize/compress before upload (e.g., sharp, jimp)
+
+Current implementation is suitable for:
+- Small to medium catalogs (<1000 products)
+- Image sizes under 5MB
+- Moderate traffic applications
 
 ## 🔒 Authentication
 
