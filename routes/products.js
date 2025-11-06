@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Product = require('../models/Product');
 const { protect, admin } = require('../middleware/auth');
+const multerConfig = require('../config/multer');
 
 // GET all public products (for browsing)
 router.get('/', async (req, res) => {
@@ -32,7 +33,8 @@ router.get('/', async (req, res) => {
     if (sort === 'price-desc') sortOption = { price: -1 };
     if (sort === 'name') sortOption = { name: 1 };
     
-    const products = await Product.find(filter)
+    // Exclude binary image data from list responses to keep payload small.
+    const products = await Product.find(filter).select('-imageData -imagesData')
       .populate('owner', 'name email')
       .sort(sortOption)
       .lean();
@@ -63,7 +65,8 @@ router.get('/my/products', protect, async (req, res) => {
       });
     }
 
-    const products = await Product.find({ owner: req.user._id })
+    // Exclude binary image data from list responses
+    const products = await Product.find({ owner: req.user._id }).select('-imageData -imagesData')
       .sort({ createdAt: -1 })
       .lean();
       
@@ -82,10 +85,27 @@ router.get('/my/products', protect, async (req, res) => {
   }
 });
 
+// Serve product main image binary
+// Note: this route must be declared before the ':id' route below
+router.get('/:id/image', async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id).select('imageData');
+    if (!product || !product.imageData || !product.imageData.data) {
+      return res.status(404).json({ success: false, message: 'Image not found' });
+    }
+
+    res.set('Content-Type', product.imageData.contentType || 'application/octet-stream');
+    return res.send(product.imageData.data);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // GET single product
 router.get('/:id', async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
+    // Exclude binary image data from the product object by default.
+    const product = await Product.findById(req.params.id).select('-imageData -imagesData')
       .populate('owner', 'name email');
       
     if (!product) {
@@ -108,7 +128,8 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST create product (Protected - Any logged in user)
-router.post('/', protect, [
+// Accepts multipart/form-data with an optional file field named 'image'.
+router.post('/', protect, multerConfig.memory.single('image'), [
   body('name')
     .trim()
     .notEmpty()
@@ -151,6 +172,12 @@ router.post('/', protect, [
       price: req.body.price,
       category: req.body.category,
       image: req.body.image || '',
+      // If a file was uploaded, save binary data
+      imageData: req.file ? {
+        data: req.file.buffer,
+        contentType: req.file.mimetype,
+        filename: req.file.originalname
+      } : undefined,
       stock: req.body.stock || 0,
       owner: req.user._id,
       isPublic: req.body.isPublic !== undefined ? req.body.isPublic : true
@@ -162,7 +189,11 @@ router.post('/', protect, [
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
-      data: newProduct
+      // Provide an image URL endpoint that can be used by the frontend to fetch
+      // the binary image regardless of environment (no localhost hardcoding).
+      data: Object.assign(newProduct.toObject(), {
+        imageUrl: `/api/products/${newProduct._id}/image`
+      })
     });
   } catch (error) {
     res.status(400).json({ 
@@ -173,7 +204,8 @@ router.post('/', protect, [
 });
 
 // PUT update product (Protected - Owner or Admin only)
-router.put('/:id', protect, [
+// Update product (can include new image file in field 'image')
+router.put('/:id', protect, multerConfig.memory.single('image'), [
   body('name')
     .optional()
     .trim()
@@ -227,6 +259,15 @@ router.put('/:id', protect, [
         product[field] = req.body[field];
       }
     });
+
+    // If a new file is uploaded, replace binary data
+    if (req.file) {
+      product.imageData = {
+        data: req.file.buffer,
+        contentType: req.file.mimetype,
+        filename: req.file.originalname
+      };
+    }
 
     const updatedProduct = await product.save();
     await updatedProduct.populate('owner', 'name email');

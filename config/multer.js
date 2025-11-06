@@ -26,7 +26,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer
+// Configure multer (disk storage - default)
 const upload = multer({
   storage: storage,
   limits: {
@@ -35,4 +35,17 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-module.exports = upload;
+// Memory storage variant (useful when you want the file buffer in req.file.buffer
+// and don't want to write to disk). We'll export it as a property so existing
+// code that requires this module still gets the disk-based default.
+const memoryStorage = multer.memoryStorage();
+const uploadMemory = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  },
+  fileFilter: fileFilter
+});
+
+module.exports = upload; // default (disk)
+module.exports.memory = uploadMemory; // named property for memory uploads

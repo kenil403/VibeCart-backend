@@ -33,6 +33,15 @@ const productSchema = new mongoose.Schema({
     type: String,
     default: 'https://via.placeholder.com/400x400?text=No+Image'
   },
+  // Binary image data stored directly in MongoDB. Use `imageData` when uploading
+  // the file as binary (e.g., via multipart form). `image` string is kept for
+  // backward compatibility (URL) but `imageData` is preferred to avoid relying
+  // on external/localhost URLs.
+  imageData: {
+    data: Buffer,
+    contentType: String,
+    filename: String
+  },
   images: [{
     type: String,
     validate: {
@@ -41,6 +50,12 @@ const productSchema = new mongoose.Schema({
       },
       message: 'Please provide a valid image URL'
     }
+  }],
+  // Optionally allow multiple binary images as well
+  imagesData: [{
+    data: Buffer,
+    contentType: String,
+    filename: String
   }],
   stock: {
     type: Number,
