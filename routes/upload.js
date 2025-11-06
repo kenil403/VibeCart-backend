@@ -3,9 +3,10 @@ const router = express.Router();
 const upload = require('../config/multer');
 const { protect } = require('../middleware/auth');
 const multer = require('multer');
+const fs = require('fs');
 
 // @route   POST /api/upload/single
-// @desc    Upload single image
+// @desc    Upload single image (converts to Base64 for MongoDB storage)
 // @access  Private
 router.post('/single', protect, upload.single('image'), (req, res) => {
   try {
@@ -16,14 +17,19 @@ router.post('/single', protect, upload.single('image'), (req, res) => {
       });
     }
 
-    const fileUrl = `/uploads/${req.file.filename}`;
+    // Read the file and convert to Base64
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = `data:${req.file.mimetype};base64,${imageBuffer.toString('base64')}`;
+    
+    // Delete the temporary file
+    fs.unlinkSync(req.file.path);
     
     res.status(200).json({
       success: true,
       message: 'File uploaded successfully',
       data: {
         filename: req.file.filename,
-        url: fileUrl,
+        url: base64Image, // Send Base64 string instead of file path
         size: req.file.size,
         mimetype: req.file.mimetype
       }
@@ -38,7 +44,7 @@ router.post('/single', protect, upload.single('image'), (req, res) => {
 });
 
 // @route   POST /api/upload/multiple
-// @desc    Upload multiple images (max 5)
+// @desc    Upload multiple images (max 5) - converts to Base64 for MongoDB storage
 // @access  Private
 router.post('/multiple', protect, upload.array('images', 5), (req, res) => {
   try {
@@ -49,12 +55,21 @@ router.post('/multiple', protect, upload.array('images', 5), (req, res) => {
       });
     }
 
-    const fileUrls = req.files.map(file => ({
-      filename: file.filename,
-      url: `/uploads/${file.filename}`,
-      size: file.size,
-      mimetype: file.mimetype
-    }));
+    const fileUrls = req.files.map(file => {
+      // Read the file and convert to Base64
+      const imageBuffer = fs.readFileSync(file.path);
+      const base64Image = `data:${file.mimetype};base64,${imageBuffer.toString('base64')}`;
+      
+      // Delete the temporary file
+      fs.unlinkSync(file.path);
+      
+      return {
+        filename: file.filename,
+        url: base64Image, // Send Base64 string instead of file path
+        size: file.size,
+        mimetype: file.mimetype
+      };
+    });
     
     res.status(200).json({
       success: true,
